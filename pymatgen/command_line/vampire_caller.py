@@ -330,9 +330,10 @@ class VampireCaller:
 
         # J_ij exchange interaction matrix
         sgraph = self.sgraph
-        ninter = 0
-        for idx in range(len(sgraph.graph.nodes)):
-            ninter += sgraph.get_coordination_of_site(idx)
+        ninter = sum(
+            len(list(sgraph.get_connected_sites(idx)))
+            for idx in range(len(sgraph.graph.nodes))
+        )
 
         ucf += ["# Interactions"]
         ucf += [f"{ninter} isotropic"]
