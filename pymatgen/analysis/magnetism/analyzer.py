@@ -389,7 +389,7 @@ class CollinearMagneticStructureAnalyzer:
         """
         structure = self.structure.copy()
 
-        structure.add_site_property("magmom", [abs(m) for m in self.magmoms])
+        structure.add_site_property("magmom", [float(abs(m)) for m in self.magmoms])
 
         if make_primitive:
             structure = structure.get_primitive_structure(use_site_props=True)
