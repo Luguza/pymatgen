@@ -719,15 +719,31 @@ class HeisenbergScreener:
             ordered_structures (list): Sanitized structures.
             ordered_energies (list): Sorted energies.
         """
-        # Get only magnetic ions & give all structures site_properties['magmom']
-        # zero threshold so that magnetic ions with small moments
-        # are preserved
-        ordered_structures = [
-            CollinearMagneticStructureAnalyzer(
-                s, make_primitive=False, threshold=0.0
-            ).get_structure_with_only_magnetic_atoms(make_primitive=False)
-            for s in structures
-        ]
+
+        # Dynamic thresholding on nonmagnetic ions until the different structures have integer factors in the number of magnetic ions. 
+        # This can happen when some orderings induce non-vanishing moments on nominally nonmagnetic ions, 
+        # which can cause the sorting to be inconsistent due to different normalizations. 
+        # We want to preserve magnetic ions with small moments, but get rid of nonmagnetic ions 
+        # that are causing the number of magnetic ions to differ across orderings.
+        n_mag_ions_are_integer_multiples = False
+        threshold_nonmag = 0 # default is 0.1 
+
+        while not n_mag_ions_are_integer_multiples:
+            # Get only magnetic ions & give all structures site_properties['magmom']
+            # zero threshold so that magnetic ions with small moments
+            # are preserved
+            threshold_nonmag += 0.1
+            ordered_structures = [
+                CollinearMagneticStructureAnalyzer(
+                    s, make_primitive=False, threshold=0.0, threshold_nonmag=threshold_nonmag
+                ).get_structure_with_only_magnetic_atoms(make_primitive=False)
+                for s in structures
+            ]
+            nums_of_magnetic_ions = np.array(list(set(len(s) for s in ordered_structures)))
+            n_mag_ions_are_integer_multiples = np.all(nums_of_magnetic_ions % nums_of_magnetic_ions[0] == 0)
+
+        if threshold_nonmag > 0.1:
+            logging.info(f"Used a nonmagnetic ion threshold of {threshold_nonmag} muB to get consistent number of magnetic ions across orderings.")
 
         # Convert to energies / magnetic ion
         energies = [e / len(s) for (e, s) in zip(energies, ordered_structures)]
