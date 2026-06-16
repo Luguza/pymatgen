@@ -979,7 +979,7 @@ class HeisenbergModel(MSONable):
     def from_dict(cls, dct: dict) -> Self:
         """Create a HeisenbergModel from a dict."""
         # Reconstitute the site ids
-        unique_site_ids = {}
+        unique_site_ids = []
         wyckoff_ids = {}
         nn_interactions = {}
 
@@ -990,12 +990,14 @@ class HeisenbergModel(MSONable):
                 nn_dict[key] = v1
             nn_interactions[k] = nn_dict
 
-        for k, v in dct["unique_site_ids"].items():
-            key = literal_eval(k)
-            if isinstance(key, int):
-                unique_site_ids[key,] = v
-            elif isinstance(key, tuple):
-                unique_site_ids[key] = v
+        # unique_site_ids is one map per ordering (a list of dicts); rebuild the
+        # tuple keys that jsanitize stringified for each ordering's map.
+        for site_map in dct["unique_site_ids"]:
+            rebuilt = {}
+            for k, v in site_map.items():
+                key = literal_eval(k)
+                rebuilt[(key,) if isinstance(key, int) else tuple(key)] = v
+            unique_site_ids.append(rebuilt)
 
         for k, v in dct["wyckoff_ids"].items():
             wyckoff_ids[literal_eval(k)] = v
@@ -1007,12 +1009,17 @@ class HeisenbergModel(MSONable):
         # Interaction graph
         igraph = StructureGraph.from_dict(dct["igraph"])
 
-        # Reconstitute the exchange matrix DataFrame
-        try:
-            ex_mat = literal_eval(dct["ex_mat"])
-            ex_mat = pd.DataFrame.from_dict(ex_mat)
-        except SyntaxError:  # if ex_mat is empty
-            ex_mat = pd.DataFrame(columns=["E", "E0"])
+        # Reconstitute the exchange matrix DataFrame. as_dict() serializes
+        # ex_mat with jsanitize, which turns a DataFrame into a dict, while
+        # older serializations may store a (JSON/repr) string instead. Accept
+        # both forms and fall back to an empty matrix when ex_mat is empty.
+        ex_mat = dct["ex_mat"]
+        if isinstance(ex_mat, str):
+            try:
+                ex_mat = literal_eval(ex_mat)
+            except (SyntaxError, ValueError):  # empty or unparsable string
+                ex_mat = None
+        ex_mat = pd.DataFrame.from_dict(ex_mat) if ex_mat else pd.DataFrame(columns=["E", "E0"])
 
         return HeisenbergModel(
             formula=dct["formula"],
